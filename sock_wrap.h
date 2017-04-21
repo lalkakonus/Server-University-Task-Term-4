@@ -28,6 +28,7 @@ public:
 	Exception (int errcode): m_ErrCode(errcode) {};
     	void Report(){
 		fprintf(stderr,"Error, code # %d !", m_ErrCode);
+		exit(-1);
 	};
     	virtual std::string GetMessage() = 0;
 };
@@ -154,6 +155,7 @@ public:
 	void PutChar(int c){
 		if (send(m_Socket, & c, 1, 0)<0)
 			throw (SocketException(SocketException::ESE_SOCKSEND));
+		std::cout << (char)c;
 		//std::cout << "# Write (char). Success" << std::endl;
 	};
 
