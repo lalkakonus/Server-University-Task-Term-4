@@ -1,49 +1,49 @@
 #include <iostream>
 #include "sock_wrap.h" 
+#include <cstdlib>
+#include <unistd.h>
+#include <fstream>
 
 using namespace std;
 using namespace SockWrap;
 
 #define PORT_NUM 1234	     // номер порта процесса-сервера 
 
-//В этом примере клиент и сервер выполняются на одном компьютере,
-//но программа легко обобщается на случай разных компьютеров. Для
-//этого можно, например, использовать сетевое имя не собственного
-//компьютера, как ниже, а имя компьютера, на котором выполняется
-//процесс-сервер
-
 int main(int argc, char* argv[])
 {
-    try {
-      char host[64];
+	try {
+      		char host[64];
 
-    // запрос сетевого имени собственной ЭВМ
-    if (gethostname(host, sizeof host) < 0) {
-        // ошибка --- досрочно завершаем выполнение
-        cerr << GetLastError();
-        perror("Host name");
-        exit (-1);
-      }
+    		if (gethostname(host, sizeof host) < 0) {
+        		cout << "TROUBLE!" << endl;
+			perror("Host name");
+        		exit(-1);
+      		}
 
-    // создаём сокет 
-    InClientSocket sock(host, PORT_NUM);
+    		InClientSocket sock(host, PORT_NUM);
+    		sock.Connect();
 
-    // устанавливаем соединение 
-    sock.Connect();
+		char buff[100]; 
+		memset(buff,0,100);
+		ifstream fin("/rawreq.txt"); 
+ 	
+		fin.seekg(0,fin.end);
+		int size=fin.tellg(),count = size / 100, moar = size % 100;	
 
-    // отправляем серверу строку
-    sock.PutString("Hello from client!");
+		fin.seekg(0);
 
-    // печатаем на экран ответ от сервера
-     cout << "Read from server: " << sock.GetString() << endl;
+		for (int i=0; i<count; i++){
+			fin.read(buff,100);
+    			sock.Write(buff,100);
+		};
+	
+		fin.read(buff,moar);
+    		sock.Write(buff,100); 
+ 	
+    		fin.close(); 
 
-    // продолжаем диалог с сервером, пока в этом есть необходимость
-    // ...
-
-    } catch (Exception& e) {
-        // ошибка --- выводим текст сообщения на экран
-        e.Report();
-    }
-    return 0;
+    	} catch (Exception& e) { e.Report();}
+	
+	return 0;
 }
 
