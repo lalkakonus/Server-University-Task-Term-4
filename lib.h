@@ -1,11 +1,11 @@
-#ifndef __SOCK_WRAP_H__
-#define __SOCK_WRAP_H__
+#ifndef __LIB_H__
+#define __LIB_H__
 
 
 #include <errno.h>
 #include <string>
 #include <iostream>
-//#include <io.h>
+#include <sys/io.h>
 #include <sys/types.h>
 #include <sys/un.h>
 #include <sys/socket.h>
@@ -28,7 +28,7 @@ public:
 	Exception (int errcode): m_ErrCode(errcode) {};
     	void Report(){
 		fprintf(stderr,"Error, code # %d !", m_ErrCode);
-		exit(-1);
+		exit(1);
 	};
     	virtual std::string GetMessage() = 0;
 };
@@ -48,8 +48,11 @@ public:
          ESE_SOCKBIND,		//7
          ESE_SOCKLISTEN,	//8
          ESE_SOCKACCEPT,	//9
-	 ESE_EXIT		//10
-    };
+	 ESE_EXIT,		//10
+    	 ESE_FORK, 		//11
+	 ESE_FILE_OPEN,		//12
+	 ESE_MEMORY_ALLOC	//13
+	};
     SocketException(SocketExceptionCode errcode) : Exception(errcode) {}
     	std::string GetMessage(){
 		return (std::string("KEK"));
@@ -79,7 +82,7 @@ class UnSocketAddress : public SocketAddress {
 public:
         UnSocketAddress (const char * SockName){
 		if ((m_pAddre = (struct sockaddr *)(new (struct sockaddr_un))) < 0)
-			throw ("Error: Memory Exception!");
+			throw (SocketException(SocketException::ESE_MEMORY_ALLOC));
 		memset(m_pAddre, 0, sizeof(struct sockaddr_un));
 		((struct sockaddr_un *)m_pAddre)->sun_family=AF_UNIX;
 		strcpy(((struct sockaddr_un *)m_pAddre)->sun_path,SockName);
@@ -104,7 +107,7 @@ class InSocketAddress : public SocketAddress {
 public:
         InSocketAddress (const char * HostName, short PortNum){
 		if ((m_pAddre =(struct sockaddr *)(new struct sockaddr_in)) < 0)
-			throw ("Error: Memory Exception!");
+			throw (SocketException(SocketException::ESE_MEMORY_ALLOC));
 		memset(m_pAddre,0,sizeof(*((struct sockaddr_in *)m_pAddre)));
 		((struct sockaddr_in *)m_pAddre)->sin_family=AF_INET;
 		((struct sockaddr_in *)m_pAddre)->sin_port=htons(PortNum);
@@ -139,8 +142,7 @@ public:
  	explicit BaseSocket(int sd = -1, SocketAddress * pAddr = NULL): m_Socket(sd), m_pAddr(pAddr) {};
 	
 	virtual ~BaseSocket(){
-		if (shutdown(m_Socket,MODE)<0) //MODE = 2
-			throw (SocketException(SocketException::ESE_EXIT));
+		shutdown(m_Socket, MODE); //MODE = 2
 		close(m_Socket);
 		std::cout << "# Connection closed " << std::endl;
 	};
@@ -246,11 +248,16 @@ public:
 	BaseSocket * Accept(){
 		int socketfd = 0;
 		unsigned int a = m_pAddr->GetLength(), *b = &a;		
+		int err = errno;
 //SHITO???? 3 arg
 		printf("# Wait for client \n");
-		if ((socketfd = accept(m_Socket, (struct sockaddr *)(* m_pAddr),/*(socklen_t *)*/ b))<0)
-			throw (SocketException(SocketException::ESE_SOCKSEND));
+		if ((socketfd = accept(m_Socket, (struct sockaddr *)(* m_pAddr), b))<0){
+			err = errno;
+			std::cout << "Error: " << strerror(err) << std::endl;
+			throw (SocketException(SocketException::ESE_SOCKACCEPT));
+		};
 		printf("# Accept succesfull \n");
+		//close(socketfd);
 		return (new BaseSocket(socketfd, m_pAddr->Clone()));
 	};
 protected:
@@ -258,7 +265,7 @@ protected:
 	void Bind(){
 		if ((bind(m_Socket, (struct sockaddr *)(*m_pAddr), m_pAddr -> GetLength()))<0){
 			int err = errno;
-			std::cout << "Err# " << err << std::endl;
+			std::cout << "Error: " << strerror(err) << std::endl;
 			throw (SocketException(SocketException::ESE_SOCKBIND));
 		};
 		printf("# Bind succesfull \n");
@@ -270,7 +277,7 @@ protected:
 		printf("# Listen started \n");
 	};
 
-	virtual void OnAccept (BaseSocket * pConn) {}; ///??????
+	//virtual void OnAccept (BaseSocket * pConn) {}; ///??????
 };
 
 // UnClientSocket - представление клиентского сокета семейства //AF_UNIX

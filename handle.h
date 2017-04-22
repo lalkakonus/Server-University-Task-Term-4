@@ -1,7 +1,10 @@
+#ifndef __HANDLE_H__
+#define __HANDLE_H__
+
 #include <iostream>
 #include <cstdlib>
 #include <fstream>
-#include "sock_wrap.h"
+#include "lib.h"
 #include <fstream>
 
 using namespace std;
@@ -14,20 +17,21 @@ public:
 	MyServerSocket () : InServerSocket (PORT_NUM) {}
 };
 
-class ReqHandle{
+class ReqHandle {
 
 public:
-	string meth, path, vers, data;
+	string meth, path, vers, data, text;
 	string uri, date, host, referer, user_agent, server;
-	string content_length, content_type;
+	string content_length, c_type;
 	string allow, last_modified, accept;
 
-	ReqHandle():server("My server 1.0"), allow("GET, HEAD"), RespCode(200){};
+	ReqHandle():c_type("text/plain"), text("OK"), server("My server 1.0"), allow("GET, HEAD"), RespCode(200){};
 
 	int RespCode;
 
 	int ParseHeader(string str){
 
+		string extension;
 		int length = str.length(), pos1=0, pos2=0;
 		
 		pos2=str.find(' ',pos1);
@@ -57,7 +61,18 @@ public:
 			pos2=uri.length();
 		path=uri.substr(1,pos2);
 		pos1=pos2+1;
+
+		if (access(path.c_str(), 0) == -1){	
+			RespCode=404;
+			text="Not found";
+		};
+
 		
+		extension=path.substr(path.find('.',0)+1,path.length());
+		cout << "File extension : " << extension << endl;
+		if (extension == "html") c_type="text/html";
+		if (extension == "jpeg" || extension == "jpg") c_type="image/jpeg";
+			
 		cout << "Path: " << path << endl;
 
 		length = uri.length();
@@ -113,25 +128,24 @@ public:
 			encount = size / 100;
 			other = size % 100;	
 			fin.seekg(0);
-		}
-		else{
-			cout << "Couldn't open file!" << endl;
-			throw "FILE";
 		};
 
-		pConn->PutString(vers + " " + to_string(RespCode) + " OK\r\n");	
+		pConn->PutString(vers + " " + to_string(RespCode) + " "+text+"\r\n");	
 		//pConn->PutString("Date"+date+"\n");	
 		pConn->PutString("Server: "+server+"\r\n");	
-		
+		pConn->PutString("Allow: " + allow + "\r\n");
 		//pConn->PutString("Last-Moified:"+last_modified+"\n");	
-		//pConn->PutString("Content-Type: text/html\r\n");	
-		pConn->PutString("Content-Type: text/html\r\n");	
-		pConn->PutString("Content-Length: "+to_string(size)+"\r\n");	
+		if (RespCode==200){
+			pConn->PutString("Content-Type: "+ c_type+"\r\n");	
+			pConn->PutString("Content-Length: "+to_string(size)+"\r\n");	
+			pConn->PutString("Accept-rages: bytes\n");
+		};
 		pConn->PutString("Connection: close\r\n");	
-		pConn->PutString("Accept-rages: bytes\n");
 		pConn->PutChar('\n');	
 		pConn->PutChar('\n');	
 		
+		if (RespCode==200){
+
 		for (int i=0; i<encount; i++){
 			fin.read(buff,100);
     			pConn->Write(buff,100);
@@ -139,50 +153,16 @@ public:
 
 		fin.read(buff,other);
     		pConn->Write(buff,other); 
- 	
-		pConn->PutChar('w');
-		pConn->PutChar('w');
-		pConn->PutChar('w');
 	
 		cout << "\n";
 		
 		fin.close(); 
+
+		};
 
 		return 0;
 	};
 
 };
 
-
-int mkline(int LineSize=100, char ch='*'){
-	cout << "\n";
-	for (int j=0; j < LineSize; j++) cout << ch ;
-	cout << "\n";
-	return 0;
-};
-
-int main(int argc, char* argv[])
-{
-	mkline();
-
-	try {
-      		MyServerSocket sock;
-		ReqHandle handler;
-		BaseSocket * pConn = sock.Accept();
-  	
-		handler.ParseRequest(pConn);
-		
-		cout << "\n--RESPONSE--\n" << endl;
-		
-		handler.MakeResponse(pConn);	
-		
-		delete pConn;
-   	}
-	catch (Exception& e){
-		e.Report();
-	};	
-
-	mkline();
-
-    return 0;
-}
+# endif
